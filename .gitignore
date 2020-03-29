@@ -84,3 +84,4 @@ CMakeLists.txt
 
 .idea/
 so-commons-library/
+build/

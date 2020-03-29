@@ -47,7 +47,10 @@ typedef enum _MessageType {
 	MUSE_CPY,
 	MUSE_MAP,
     	MUSE_SYNC,
-    	MUSE_UNMAP
+    	MUSE_UNMAP,
+
+    // Chat
+    ENVIAR_MENSAJE
 
 } MessageType;
 
