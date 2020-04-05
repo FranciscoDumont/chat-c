@@ -50,7 +50,9 @@ typedef enum _MessageType {
     	MUSE_UNMAP,
 
     // Chat
-    ENVIAR_MENSAJE
+    ENVIAR_MENSAJE,
+    MOSTRAR_MENSAJE,
+    HANDSHAKE
 
 } MessageType;
 

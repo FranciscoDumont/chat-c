@@ -15,39 +15,73 @@
 #include <commons/collections/list.h>
 #include <altaLibreria/connections.h>
 #include <altaLibreria/structures.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 t_log* logger;
 t_config* config_file;
 
+char* config_server_ip;
 int config_listen_port;
-char* config_server_name;
+int server_socket = 0;
 
 void *server_function(void *arg);
 void tests_server();
+int enviar_mensaje(char* mensaje);
+void mostrar_mensaje(chat_mensaje mensaje);
+void * crear_consola();
+chat_usuario* self_usuario;
 
 int main() {
     logger = log_create("servr.log", "SERVER", 1, LOG_LEVEL_TRACE);
 
-    config_file = config_create("server_config");
+    config_file = config_create("cliente_config");
 
     if (!config_file) {
         log_error(logger, "No se encontró el archivo de configuración");
         return 1;
     }
 
-    config_listen_port = config_get_int_value(config_file, "LISTEN_PORT");
-    config_server_name = config_get_string_value(config_file, "SERVER_NAME");
+    config_server_ip = config_get_string_value(config_file, "SERVER_IP");
+    config_listen_port = config_get_int_value(config_file, "SERVER_PORT");
 
     log_info(logger, \
-        "Configuración levantada\n\tLISTEN_PORT: %d\n\tSERVER_NAME: %s.", \
-        config_listen_port, \
-        config_server_name);
+        "Configuración levantada\n\tSERVER IP: %s\n\tSERVER_PORT: %d", \
+        config_server_ip, \
+        config_listen_port);
+
+    if ((server_socket = create_socket()) == -1) {
+        printf("Error al crear el socket\n");
+        return -1;
+    }
+
+    if (connect_socket(server_socket, config_server_ip, config_listen_port) == -1) {
+        printf("Error al conectarse al servidor\n");
+        return -1;
+    }
+
+    char* username = readline("Ponete un nombre changuito\n> ");
+    self_usuario = malloc(sizeof(chat_usuario));
+    self_usuario->nombre = username;
+    self_usuario->id = 0;
+    t_paquete *package = create_package(HANDSHAKE);
+    add_to_package(package, (void*)username, strlen(username) + 1);
+    send_package(package, server_socket);
+    free_package(package);
+    recv(server_socket, &self_usuario->id, sizeof(int), 0);
+    printf("%d",self_usuario->id);
 
     pthread_t server_thread;
     pthread_create(&server_thread, NULL, server_function, NULL);
-    //tests_server();
-    pthread_join(server_thread, NULL);
+    pthread_detach(server_thread);
 
+    pthread_t console_thread;
+    pthread_create(&console_thread, NULL, crear_consola, NULL);
+
+    //tests_server();
+
+    pthread_join(server_thread, NULL);
+    free(self_usuario);
     return 0;
 
 }
@@ -59,14 +93,11 @@ void *server_function(void *arg) {
 
     if((socket = create_socket()) == -1) {
         log_error(logger, "Error al crear el socket");
-        //TODO:retornar algun error?
     }
     if ((bind_socket(socket, config_listen_port)) == -1) {
         log_error(logger, "Error al bindear el socket");
-        //TODO:retornar algun error?
     }
 
-    //TODO revisar si esta bien
     //--Funcion que se ejecuta cuando se conecta un nuevo programa
     void new(int fd, char *ip, int port) {
         if(&fd != null && ip != null && &port != null) {
@@ -74,7 +105,6 @@ void *server_function(void *arg) {
         }
     }
 
-    //TODO revisar si esta bien
     //--Funcion que se ejecuta cuando se pierde la conexion con un cliente
     void lost(int fd, char *ip, int port) {
         if(&fd == null && ip == null && &port == null){
@@ -90,14 +120,11 @@ void *server_function(void *arg) {
 
         t_list *cosas = receive_package(fd, headerStruct);
 
-
         switch (headerStruct->type) {
-            case ENVIAR_MENSAJE:;
+            case MOSTRAR_MENSAJE:;
                 {
-                    char *path = ((char *) list_get(cosas, 0));
-                    size_t length = *((size_t*) list_get(cosas, 1));
-                    int flags = *((int*) list_get(cosas, 2));
-                    muse_map(path,length,flags);
+                    chat_mensaje mensaje = *((chat_mensaje*) list_get(cosas, 0));
+                    mostrar_mensaje(mensaje);
                     break;
                 }
 
@@ -113,28 +140,18 @@ void *server_function(void *arg) {
 
 
 void * crear_consola() {
-
-    comando_t comando;
-
     char *linea;
     int quit = 0;
-
-    printf("Bienvenido/a a la consola de %s\n",unString);
-
     while(quit == 0){
-
         linea = readline("> ");
         if (linea && !linea[0]) {
             quit = 1;
         }else{
             add_history(linea);
-            vaciar_comando(&comando);
-            cargar_comando(&comando,linea);
-
-            if((strcmp(comando.comando,"exit")==0)){
+            if((strcmp(linea,"exit")==0)){
                 quit = 1;
             }else{
-                (*execute)(&comando);
+                enviar_mensaje(linea);
             }
         }
         free(linea);
@@ -143,24 +160,44 @@ void * crear_consola() {
 }
 
 
+int enviar_mensaje(char* mensaje){
+    t_paquete *package = create_package(ENVIAR_MENSAJE);
+    chat_mensaje* nuevo_mensaje = malloc(sizeof(chat_mensaje));
+    nuevo_mensaje->usuario = self_usuario;
+    nuevo_mensaje->mensaje = mensaje;
+    add_to_package(package, (void*)mensaje, strlen(mensaje) + 1);
+    if(send_package(package, server_socket) == -1){
+        log_error(logger, "Error al enviar el mensaje.");
+        free_package(package);
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+}
+
+
+void mostrar_mensaje(chat_mensaje mensaje){
+    printf("%s: %s", mensaje.usuario->nombre, mensaje.mensaje);
+}
+
+
 void tests_server(){
 
-    //mem_assert recive mensaje de error y una condicion, si falla el test lo loggea
-    #define test_assert(message, test) do { if (!(test)) { log_error(test_logger, message); tests_fail++; } tests_run++; } while (0)
-    t_log* test_logger = log_create("memory_tests.log", "MEM", true, LOG_LEVEL_TRACE);
-    int tests_run = 0;
-    int tests_fail = 0;
-
-    int id = 1;
-    muse_init(id, "localhost", 5003);
-
-    int tmp;
-    tmp = muse_alloc(10, id);
-    test_assert("Alloc 1", tmp == 5);
-
-    tmp = muse_alloc(16, id);
-    test_assert("Alloc 2", tmp == 5+10+5);
-
-    log_warning(test_logger, "Pasaron %d de %d tests", tests_run-tests_fail, tests_run);
-    log_destroy(test_logger);
+//    //mem_assert recive mensaje de error y una condicion, si falla el test lo loggea
+//    #define test_assert(message, test) do { if (!(test)) { log_error(test_logger, message); tests_fail++; } tests_run++; } while (0)
+//    t_log* test_logger = log_create("memory_tests.log", "MEM", true, LOG_LEVEL_TRACE);
+//    int tests_run = 0;
+//    int tests_fail = 0;
+//
+//    int id = 1;
+//    muse_init(id, "localhost", 5003);
+//
+//    int tmp;
+//    tmp = muse_alloc(10, id);
+//    test_assert("Alloc 1", tmp == 5);
+//
+//    tmp = muse_alloc(16, id);
+//    test_assert("Alloc 2", tmp == 5+10+5);
+//
+//    log_warning(test_logger, "Pasaron %d de %d tests", tests_run-tests_fail, tests_run);
+//    log_destroy(test_logger);
 }

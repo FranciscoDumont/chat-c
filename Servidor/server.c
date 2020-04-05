@@ -21,9 +21,13 @@ t_config* config_file;
 
 int config_listen_port;
 char* config_server_name;
+t_list* lista_usuarios;
 
 void *server_function(void *arg);
 void tests_server();
+chat_usuario* find_usuario(int id_buscado);
+void enviar_mensaje(chat_usuario* usuario,chat_mensaje* mensaje);
+
 
 int main() {
     logger = log_create("server.log", "SERVER", 1, LOG_LEVEL_TRACE);
@@ -43,6 +47,8 @@ int main() {
         config_listen_port, \
         config_server_name);
 
+    lista_usuarios = list_create();
+
     pthread_t server_thread;
     pthread_create(&server_thread, NULL, server_function, NULL);
     //tests_server();
@@ -59,22 +65,23 @@ void *server_function(void *arg) {
 
     if((socket = create_socket()) == -1) {
         log_error(logger, "Error al crear el socket");
-        //TODO:retornar algun error?
-    }
-    if ((bind_socket(socket, config_listen_port)) == -1) {
-        log_error(logger, "Error al bindear el socket");
-        //TODO:retornar algun error?
     }
 
-    //TODO revisar si esta bien
+    if ((bind_socket(socket, config_listen_port)) == -1) {
+        log_error(logger, "Error al bindear el socket");
+    }
+
     //--Funcion que se ejecuta cuando se conecta un nuevo programa
     void new(int fd, char *ip, int port) {
         if(&fd != null && ip != null && &port != null) {
             log_info(logger, "Nueva conexión");
         }
+        // Cuando se conecta alguien nuevo lo agrego a la lista de usuarios
+        chat_usuario* nuevo_usuario = malloc(sizeof(chat_usuario));
+        nuevo_usuario->id = fd;
+        list_add(lista_usuarios, nuevo_usuario);
     }
 
-    //TODO revisar si esta bien
     //--Funcion que se ejecuta cuando se pierde la conexion con un cliente
     void lost(int fd, char *ip, int port) {
         if(&fd == null && ip == null && &port == null){
@@ -90,14 +97,23 @@ void *server_function(void *arg) {
 
         t_list *cosas = receive_package(fd, headerStruct);
 
-
         switch (headerStruct->type) {
             case ENVIAR_MENSAJE:;
                 {
-                    char *path = ((char *) list_get(cosas, 0));
-                    size_t length = *((size_t*) list_get(cosas, 1));
-                    int flags = *((int*) list_get(cosas, 2));
-                    muse_map(path,length,flags);
+                    chat_mensaje* mensaje = ((chat_mensaje *) list_get(cosas, 0));
+                    for (int i = 0; i < list_size(lista_usuarios); ++i) {
+                        chat_usuario* usuario = list_get(lista_usuarios, i);
+                        enviar_mensaje(usuario, mensaje);
+                    }
+                    break;
+                }
+            case HANDSHAKE:;
+                {
+                    //En el handshake el server completa el username y el cliente el id
+                    char* username = list_get(cosas, 0);
+                    chat_usuario* usuario = find_usuario(fd);
+                    usuario->nombre = strdup(username);
+                    send(fd, &fd, sizeof(int), 0);
                     break;
                 }
 
@@ -112,24 +128,47 @@ void *server_function(void *arg) {
 }
 
 
+chat_usuario* find_usuario(int id_buscado){
+    int key_search(chat_usuario* un_segmento){
+        return un_segmento->id == id_buscado;
+    }
+
+     return list_find(lista_usuarios,(void*)key_search);
+}
+
+
+void enviar_mensaje(chat_usuario* usuario, chat_mensaje* mensaje){
+    t_paquete *package = create_package(ENVIAR_MENSAJE);
+    chat_mensaje* nuevo_mensaje = malloc(sizeof(chat_mensaje));
+    nuevo_mensaje->usuario = self_usuario;
+    nuevo_mensaje->mensaje = mensaje;
+    add_to_package(package, (void*)mensaje, strlen(mensaje) + 1);
+    if(send_package(package, server_socket) == -1){
+        log_error(logger, "Error al enviar el mensaje.");
+        free_package(package);
+        return EXIT_FAILURE;
+    }
+}
+
+
 void tests_server(){
-
-    //mem_assert recive mensaje de error y una condicion, si falla el test lo loggea
-    #define test_assert(message, test) do { if (!(test)) { log_error(test_logger, message); tests_fail++; } tests_run++; } while (0)
-    t_log* test_logger = log_create("memory_tests.log", "MEM", true, LOG_LEVEL_TRACE);
-    int tests_run = 0;
-    int tests_fail = 0;
-
-    int id = 1;
-    muse_init(id, "localhost", 5003);
-
-    int tmp;
-    tmp = muse_alloc(10, id);
-    test_assert("Alloc 1", tmp == 5);
-
-    tmp = muse_alloc(16, id);
-    test_assert("Alloc 2", tmp == 5+10+5);
-
-    log_warning(test_logger, "Pasaron %d de %d tests", tests_run-tests_fail, tests_run);
-    log_destroy(test_logger);
+//
+//    //mem_assert recive mensaje de error y una condicion, si falla el test lo loggea
+//    #define test_assert(message, test) do { if (!(test)) { log_error(test_logger, message); tests_fail++; } tests_run++; } while (0)
+//    t_log* test_logger = log_create("memory_tests.log", "MEM", true, LOG_LEVEL_TRACE);
+//    int tests_run = 0;
+//    int tests_fail = 0;
+//
+//    int id = 1;
+//    muse_init(id, "localhost", 5003);
+//
+//    int tmp;
+//    tmp = muse_alloc(10, id);
+//    test_assert("Alloc 1", tmp == 5);
+//
+//    tmp = muse_alloc(16, id);
+//    test_assert("Alloc 2", tmp == 5+10+5);
+//
+//    log_warning(test_logger, "Pasaron %d de %d tests", tests_run-tests_fail, tests_run);
+//    log_destroy(test_logger);
 }

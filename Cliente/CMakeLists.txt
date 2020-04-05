@@ -11,4 +11,5 @@ target_link_libraries(Cliente
         "/usr/lib/libaltaLibreria.so"
         "/usr/lib/libcommons.so"
         pthread
-        m)
+        m
+        readline)
