@@ -22,18 +22,20 @@ t_log* logger;
 t_config* config_file;
 
 char* config_server_ip;
-int config_listen_port;
+int config_server_port;
 int server_socket = 0;
 
 void *server_function(void *arg);
 void tests_server();
 int enviar_mensaje(char* mensaje);
-void mostrar_mensaje(chat_mensaje mensaje);
+void mostrar_mensaje(chat_mensaje* mensaje);
 void * crear_consola();
+
+
 chat_usuario* self_usuario;
 
 int main() {
-    logger = log_create("servr.log", "SERVER", 1, LOG_LEVEL_TRACE);
+    logger = log_create("cliente.log", "CLIENTE", 1, LOG_LEVEL_TRACE);
 
     config_file = config_create("cliente_config");
 
@@ -43,44 +45,47 @@ int main() {
     }
 
     config_server_ip = config_get_string_value(config_file, "SERVER_IP");
-    config_listen_port = config_get_int_value(config_file, "SERVER_PORT");
+    config_server_port = config_get_int_value(config_file, "SERVER_PORT");
 
     log_info(logger, \
         "Configuración levantada\n\tSERVER IP: %s\n\tSERVER_PORT: %d", \
         config_server_ip, \
-        config_listen_port);
+        config_server_port);
 
     if ((server_socket = create_socket()) == -1) {
         printf("Error al crear el socket\n");
         return -1;
     }
 
-    if (connect_socket(server_socket, config_server_ip, config_listen_port) == -1) {
+    if (connect_socket(server_socket, config_server_ip, config_server_port) == -1) {
         printf("Error al conectarse al servidor\n");
         return -1;
     }
-
-    char* username = readline("Ponete un nombre changuito\n> ");
-    self_usuario = malloc(sizeof(chat_usuario));
-    self_usuario->nombre = username;
-    self_usuario->id = 0;
-    t_paquete *package = create_package(HANDSHAKE);
-    add_to_package(package, (void*)username, strlen(username) + 1);
-    send_package(package, server_socket);
-    free_package(package);
-    recv(server_socket, &self_usuario->id, sizeof(int), 0);
-    printf("%d",self_usuario->id);
 
     pthread_t server_thread;
     pthread_create(&server_thread, NULL, server_function, NULL);
     pthread_detach(server_thread);
 
+    nanosleep((const struct timespec[]){{0, 500000000L}}, NULL); // Duermo medio seg
+    char* username = readline("\n\nPonete un nombre changuito\n> ");
+    self_usuario = malloc(sizeof(chat_usuario));
+    self_usuario->nombre = username;
+    self_usuario->id = 0;
+    // Hace el handshake para conseguir el id
+    t_paquete *package = create_package(HANDSHAKE);
+    add_to_package(package, (void*)username, strlen(username) + 1);
+    send_package(package, server_socket);
+    free_package(package);
+    recv(server_socket, &self_usuario->id, sizeof(int), 0);
+
     pthread_t console_thread;
     pthread_create(&console_thread, NULL, crear_consola, NULL);
 
+    log_info(logger, "Se creo el usuario: %s#%d", self_usuario->nombre, self_usuario->id);
+
     //tests_server();
 
-    pthread_join(server_thread, NULL);
+    pthread_join(console_thread, NULL);
     free(self_usuario);
     return 0;
 
@@ -94,7 +99,8 @@ void *server_function(void *arg) {
     if((socket = create_socket()) == -1) {
         log_error(logger, "Error al crear el socket");
     }
-    if ((bind_socket(socket, config_listen_port)) == -1) {
+// A este no le bindeo un puerto bro ya foee
+    if ((bind_socket(socket, 6006)) == -1) {
         log_error(logger, "Error al bindear el socket");
     }
 
@@ -123,7 +129,7 @@ void *server_function(void *arg) {
         switch (headerStruct->type) {
             case MOSTRAR_MENSAJE:;
                 {
-                    chat_mensaje mensaje = *((chat_mensaje*) list_get(cosas, 0));
+                    chat_mensaje* mensaje = void_a_mensaje(list_get(cosas, 0));
                     mostrar_mensaje(mensaje);
                     break;
                 }
@@ -135,7 +141,7 @@ void *server_function(void *arg) {
         }
     }
     log_info(logger, "Hilo de servidor iniciado...");
-    start_server(socket, &new, &lost, &incoming);
+    start_multithread_server(socket, &new, &lost, &incoming);
 }
 
 
@@ -143,7 +149,7 @@ void * crear_consola() {
     char *linea;
     int quit = 0;
     while(quit == 0){
-        linea = readline("> ");
+        linea = readline("");
         if (linea && !linea[0]) {
             quit = 1;
         }else{
@@ -162,10 +168,9 @@ void * crear_consola() {
 
 int enviar_mensaje(char* mensaje){
     t_paquete *package = create_package(ENVIAR_MENSAJE);
-    chat_mensaje* nuevo_mensaje = malloc(sizeof(chat_mensaje));
-    nuevo_mensaje->usuario = self_usuario;
-    nuevo_mensaje->mensaje = mensaje;
-    add_to_package(package, (void*)mensaje, strlen(mensaje) + 1);
+    chat_mensaje* nuevo_mensaje = crear_mensaje(mensaje, self_usuario->id);
+    int nuevo_mensaje_size = sizeof(int) + nuevo_mensaje->mensaje_length + sizeof(int);
+    add_to_package(package, mensaje_a_void(nuevo_mensaje), nuevo_mensaje_size);
     if(send_package(package, server_socket) == -1){
         log_error(logger, "Error al enviar el mensaje.");
         free_package(package);
@@ -175,9 +180,10 @@ int enviar_mensaje(char* mensaje){
 }
 
 
-void mostrar_mensaje(chat_mensaje mensaje){
-    printf("%s: %s", mensaje.usuario->nombre, mensaje.mensaje);
+void mostrar_mensaje(chat_mensaje* mensaje){
+    custom_print("%d: %s\n", mensaje->id_usuario, mensaje->mensaje);
 }
+
 
 
 void tests_server(){

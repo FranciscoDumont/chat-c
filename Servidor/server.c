@@ -76,10 +76,6 @@ void *server_function(void *arg) {
         if(&fd != null && ip != null && &port != null) {
             log_info(logger, "Nueva conexión");
         }
-        // Cuando se conecta alguien nuevo lo agrego a la lista de usuarios
-        chat_usuario* nuevo_usuario = malloc(sizeof(chat_usuario));
-        nuevo_usuario->id = fd;
-        list_add(lista_usuarios, nuevo_usuario);
     }
 
     //--Funcion que se ejecuta cuando se pierde la conexion con un cliente
@@ -100,7 +96,7 @@ void *server_function(void *arg) {
         switch (headerStruct->type) {
             case ENVIAR_MENSAJE:;
                 {
-                    chat_mensaje* mensaje = ((chat_mensaje *) list_get(cosas, 0));
+                    chat_mensaje* mensaje = void_a_mensaje(list_get(cosas, 0));
                     for (int i = 0; i < list_size(lista_usuarios); ++i) {
                         chat_usuario* usuario = list_get(lista_usuarios, i);
                         enviar_mensaje(usuario, mensaje);
@@ -109,11 +105,22 @@ void *server_function(void *arg) {
                 }
             case HANDSHAKE:;
                 {
+                    // Cuando se conecta alguien nuevo lo agrego a la lista de usuarios
+                    chat_usuario* nuevo_usuario = malloc(sizeof(chat_usuario));
+
+                    int usuario_socket;
+                    usuario_socket = create_socket();
+                    int hola = connect_socket(usuario_socket, "localhost", 6006);
+
                     //En el handshake el server completa el username y el cliente el id
                     char* username = list_get(cosas, 0);
-                    chat_usuario* usuario = find_usuario(fd);
-                    usuario->nombre = strdup(username);
-                    send(fd, &fd, sizeof(int), 0);
+
+                    nuevo_usuario->id = usuario_socket;
+                    nuevo_usuario->nombre_length = 5;
+                    nuevo_usuario->nombre = strdup(username);
+                    list_add(lista_usuarios, nuevo_usuario);
+
+                    send(fd, &usuario_socket, sizeof(int), 0);
                     break;
                 }
 
@@ -124,7 +131,7 @@ void *server_function(void *arg) {
         }
     }
     log_info(logger, "Hilo de servidor iniciado...");
-    start_server(socket, &new, &lost, &incoming);
+    start_multithread_server(socket, &new, &lost, &incoming);
 }
 
 
@@ -138,15 +145,14 @@ chat_usuario* find_usuario(int id_buscado){
 
 
 void enviar_mensaje(chat_usuario* usuario, chat_mensaje* mensaje){
-    t_paquete *package = create_package(ENVIAR_MENSAJE);
-    chat_mensaje* nuevo_mensaje = malloc(sizeof(chat_mensaje));
-    nuevo_mensaje->usuario = self_usuario;
-    nuevo_mensaje->mensaje = mensaje;
-    add_to_package(package, (void*)mensaje, strlen(mensaje) + 1);
-    if(send_package(package, server_socket) == -1){
+    t_paquete *package = create_package(MOSTRAR_MENSAJE);
+    int mensaje_size = sizeof(int) + mensaje->mensaje_length + sizeof(int);
+    add_to_package(package, mensaje_a_void(mensaje), mensaje_size);
+    log_info(logger, "Envio el mensaje %s, al socket %d", mensaje->mensaje, usuario->id);
+    if(send_package(package, usuario->id) == -1){
         log_error(logger, "Error al enviar el mensaje.");
         free_package(package);
-        return EXIT_FAILURE;
+        return;
     }
 }
 

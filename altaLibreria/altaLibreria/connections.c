@@ -440,3 +440,39 @@ t_list *receive_package(int socket_cliente, MessageHeader *header) {
     free(buffer);
     return valores;
 }
+
+
+chat_mensaje* crear_mensaje(char* mensaje, int user_id){
+    chat_mensaje* nuevo_mensaje = malloc(sizeof(chat_mensaje));
+    nuevo_mensaje->id_usuario = user_id;
+    nuevo_mensaje->mensaje_length = strlen(mensaje)+1;
+    nuevo_mensaje->mensaje = mensaje;
+    return nuevo_mensaje;
+}
+
+void* mensaje_a_void(chat_mensaje* mensaje){
+    void* stream = malloc(sizeof(int)+ sizeof(int)+mensaje->mensaje_length);
+    int offset = 0;
+
+    memcpy(stream + offset, &mensaje->id_usuario, sizeof(int));
+    offset += sizeof(int);
+    memcpy(stream + offset, &mensaje->mensaje_length, sizeof(int));
+    offset += sizeof(int);
+    memcpy(stream + offset, mensaje->mensaje, mensaje->mensaje_length);
+    
+    return stream;
+}
+
+chat_mensaje* void_a_mensaje(void* stream){
+    chat_mensaje* mensaje = malloc(sizeof(mensaje));
+
+    memcpy(&(mensaje->id_usuario), stream, sizeof(int));
+    stream += sizeof(int);
+    memcpy(&(mensaje->mensaje_length), stream, sizeof(int));
+    stream += sizeof(int);
+
+    mensaje->mensaje = malloc(mensaje->mensaje_length);
+    memcpy(mensaje->mensaje, stream, mensaje->mensaje_length);
+
+    return mensaje;
+}

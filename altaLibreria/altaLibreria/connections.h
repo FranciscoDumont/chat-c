@@ -67,5 +67,8 @@ int start_multithread_server(int socket,
 							 void (*lost_connection)(int fd, char *ip, int port),
 							 void (*incoming_message)(int fd, char *ip, int port, MessageHeader *header));
 
+chat_mensaje* crear_mensaje(char* mensaje, int user_id);
+chat_mensaje* void_a_mensaje(void* stream);
+void* mensaje_a_void(chat_mensaje* mensaje);
 
 #endif
