@@ -105,15 +105,16 @@ void *server_function(void *arg) {
                 }
             case HANDSHAKE:;
                 {
-                    // Cuando se conecta alguien nuevo lo agrego a la lista de usuarios
-                    chat_usuario* nuevo_usuario = malloc(sizeof(chat_usuario));
+                    //En el handshake el server completa el username y el cliente el id
+                    char* username = list_get(cosas, 0);
+                    int user_port = *((int*) list_get(cosas, 1));
 
                     int usuario_socket;
                     usuario_socket = create_socket();
-                    int hola = connect_socket(usuario_socket, "localhost", 6006);
+                    connect_socket(usuario_socket, ip, user_port);
 
-                    //En el handshake el server completa el username y el cliente el id
-                    char* username = list_get(cosas, 0);
+                    // Cuando se conecta alguien nuevo lo agrego a la lista de usuarios
+                    chat_usuario* nuevo_usuario = malloc(sizeof(chat_usuario));
 
                     nuevo_usuario->id = usuario_socket;
                     nuevo_usuario->nombre_length = 5;

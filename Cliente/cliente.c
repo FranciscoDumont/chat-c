@@ -24,12 +24,14 @@ t_config* config_file;
 char* config_server_ip;
 int config_server_port;
 int server_socket = 0;
+int listen_port;
 
 void *server_function(void *arg);
 void tests_server();
 int enviar_mensaje(char* mensaje);
 void mostrar_mensaje(chat_mensaje* mensaje);
 void * crear_consola();
+void handshake();
 
 
 chat_usuario* self_usuario;
@@ -70,13 +72,11 @@ int main() {
     char* username = readline("\n\nPonete un nombre changuito\n> ");
     self_usuario = malloc(sizeof(chat_usuario));
     self_usuario->nombre = username;
+    self_usuario->nombre_length = strlen(username) + 1;
     self_usuario->id = 0;
+
     // Hace el handshake para conseguir el id
-    t_paquete *package = create_package(HANDSHAKE);
-    add_to_package(package, (void*)username, strlen(username) + 1);
-    send_package(package, server_socket);
-    free_package(package);
-    recv(server_socket, &self_usuario->id, sizeof(int), 0);
+    handshake();
 
     pthread_t console_thread;
     pthread_create(&console_thread, NULL, crear_consola, NULL);
@@ -99,10 +99,20 @@ void *server_function(void *arg) {
     if((socket = create_socket()) == -1) {
         log_error(logger, "Error al crear el socket");
     }
-// A este no le bindeo un puerto bro ya foee
-    if ((bind_socket(socket, 6006)) == -1) {
-        log_error(logger, "Error al bindear el socket");
+
+    // Bindeo el socket a un puerto random entre [6000-6999]
+    srand(time(NULL));
+    int todo_mal = 1;
+    while(todo_mal){
+        listen_port = rand()%1000;
+        listen_port += 6000;
+        if ((bind_socket(socket, listen_port)) == -1) {
+            log_error(logger, "Error al bindear el socket");
+        } else {
+            todo_mal = 0;
+        }
     }
+
 
     //--Funcion que se ejecuta cuando se conecta un nuevo programa
     void new(int fd, char *ip, int port) {
@@ -179,6 +189,18 @@ int enviar_mensaje(char* mensaje){
     return EXIT_SUCCESS;
 }
 
+
+void handshake(){
+    t_paquete *package = create_package(HANDSHAKE);
+    add_to_package(package, (void*)self_usuario->nombre, self_usuario->nombre_length);
+    void* _listen_port = malloc(sizeof(int));
+    *((int*) _listen_port) = listen_port;
+    add_to_package(package, _listen_port, sizeof(int));
+    send_package(package, server_socket);
+    free(_listen_port);
+    free_package(package);
+    recv(server_socket, &self_usuario->id, sizeof(int), 0);
+}
 
 void mostrar_mensaje(chat_mensaje* mensaje){
     custom_print("%d: %s\n", mensaje->id_usuario, mensaje->mensaje);
