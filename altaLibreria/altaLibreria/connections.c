@@ -193,7 +193,7 @@ void* server_client(void* _params){
 
     //Libero la memoria que pedi
     free(header);
-    free(params->client_ip);
+    //free(params->client_ip);
     free(params);
 
 }
@@ -472,7 +472,7 @@ void* mensaje_a_void(chat_mensaje* mensaje){
 }
 
 chat_mensaje* void_a_mensaje(void* stream){
-    chat_mensaje* mensaje = malloc(sizeof(mensaje));
+    chat_mensaje* mensaje = malloc(sizeof(chat_mensaje));
 
     memcpy(&(mensaje->id_usuario), stream, sizeof(int));
     stream += sizeof(int);

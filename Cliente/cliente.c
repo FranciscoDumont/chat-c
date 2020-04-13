@@ -33,9 +33,6 @@ void mostrar_mensaje(chat_mensaje* mensaje);
 void * crear_consola();
 void handshake();
 
-chat_mensaje* void_a_mensaje(void* stream);
-void* mensaje_a_void(chat_mensaje* mensaje);
-
 chat_usuario* self_usuario;
 
 int main() {
@@ -233,44 +230,4 @@ void tests_server(){
 //
 //    log_warning(test_logger, "Pasaron %d de %d tests", tests_run-tests_fail, tests_run);
 //    log_destroy(test_logger);
-}
-
-void* mensaje_a_void(chat_mensaje* mensaje){
-    void* stream = malloc(sizeof(int)*3 + mensaje->nombre_usuario_length + mensaje->mensaje_length);
-    int offset = 0;
-
-    memcpy(stream + offset, &mensaje->id_usuario, sizeof(int));
-    offset += sizeof(int);
-
-    memcpy(stream + offset, &mensaje->nombre_usuario_length, sizeof(int));
-    offset += sizeof(int);
-    memcpy(stream + offset, mensaje->nombre_usuario, mensaje->nombre_usuario_length);
-    offset += mensaje->nombre_usuario_length;
-
-    memcpy(stream + offset, &mensaje->mensaje_length, sizeof(int));
-    offset += sizeof(int);
-    memcpy(stream + offset, mensaje->mensaje, mensaje->mensaje_length);
-
-    return stream;
-}
-
-chat_mensaje* void_a_mensaje(void* stream){
-    chat_mensaje* mensaje = malloc(sizeof(mensaje));
-
-    memcpy(&(mensaje->id_usuario), stream, sizeof(int));
-    stream += sizeof(int);
-
-    memcpy(&(mensaje->nombre_usuario_length), stream, sizeof(int));
-    stream += sizeof(int);
-
-    mensaje->nombre_usuario = malloc(mensaje->nombre_usuario_length);
-    memcpy(mensaje->nombre_usuario, stream, mensaje->nombre_usuario_length);
-    stream += mensaje->nombre_usuario_length;
-
-    memcpy(&(mensaje->mensaje_length), stream, sizeof(int));
-    stream += sizeof(int);
-    mensaje->mensaje = malloc(mensaje->mensaje_length);
-    memcpy(mensaje->mensaje, stream, mensaje->mensaje_length);
-
-    return mensaje;
 }
