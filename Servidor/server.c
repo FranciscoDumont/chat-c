@@ -147,9 +147,9 @@ chat_usuario* find_usuario(int id_buscado){
 
 void enviar_mensaje(chat_usuario* usuario, chat_mensaje* mensaje){
     t_paquete *package = create_package(MOSTRAR_MENSAJE);
-    int mensaje_size = sizeof(int) + mensaje->mensaje_length + sizeof(int);
+    int mensaje_size = sizeof(int)*3 + mensaje->mensaje_length + mensaje->nombre_usuario_length;
     add_to_package(package, mensaje_a_void(mensaje), mensaje_size);
-    log_info(logger, "Envio el mensaje %s, al socket %d", mensaje->mensaje, usuario->id);
+    log_info(logger, "Envio el mensaje %s, al user %s#%d", mensaje->mensaje, usuario->nombre, usuario->id);
     if(send_package(package, usuario->id) == -1){
         log_error(logger, "Error al enviar el mensaje.");
         free_package(package);

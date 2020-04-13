@@ -40,6 +40,8 @@ typedef struct {
 
 typedef struct {
     int id_usuario;
+    int nombre_usuario_length;
+    char* nombre_usuario;
     int mensaje_length;
     char* mensaje;
 } chat_mensaje;
